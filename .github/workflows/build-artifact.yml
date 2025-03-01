@@ -56,11 +56,29 @@ jobs:
       run: |
         NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 pnpm run build
       env:
-        NODE_OPTIONS: '--max-old-space-size=12288'
+        NODE_OPTIONS: '--max-old-space-size=7168'
         
     - name: Package build artifacts
       run: |
-        tar -czf lobe-chat-build.tar.gz .next public package.json pnpm-lock.yaml next.config.js
+        # 创建文件列表
+        FILES_TO_PACKAGE=".next public package.json"
+        
+        # 检查并添加存在的文件
+        if [ -f "bun.lockb" ]; then
+          FILES_TO_PACKAGE="$FILES_TO_PACKAGE bun.lockb"
+        elif [ -f "pnpm-lock.yaml" ]; then
+          FILES_TO_PACKAGE="$FILES_TO_PACKAGE pnpm-lock.yaml"
+        fi
+        
+        # 检查 Next.js 配置文件
+        if [ -f "next.config.js" ]; then
+          FILES_TO_PACKAGE="$FILES_TO_PACKAGE next.config.js"
+        elif [ -f "next.config.mjs" ]; then
+          FILES_TO_PACKAGE="$FILES_TO_PACKAGE next.config.mjs"
+        fi
+        
+        echo "Packaging files: $FILES_TO_PACKAGE"
+        tar -czf lobe-chat-build.tar.gz $FILES_TO_PACKAGE
         
     - name: Upload build artifact
       uses: actions/upload-artifact@v4
