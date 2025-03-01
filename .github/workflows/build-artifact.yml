@@ -2,34 +2,32 @@ name: Build LobeChat Artifact
 
 on:
   workflow_dispatch:  # 允许手动触发
-  push:
-    branches: [ main ]  # 当推送到 main 分支时自动触发
-    paths-ignore:      # 忽略这些文件的变更
-      - '**.md'
-      - 'docs/**'
-      - '.github/**'
-      - '!.github/workflows/build-artifact.yml'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # 设置超时时间
+    timeout-minutes: 120  # 设置超时时间为2小时
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4  # 更新到 v4
+      uses: actions/checkout@v4
       with:
         fetch-depth: 1  # 减少克隆深度以加快速度
       
     - name: Setup Node.js
-      uses: actions/setup-node@v4  # 更新到 v4
+      uses: actions/setup-node@v4
       with:
         node-version: '18'
         
     - name: Setup pnpm
       uses: pnpm/action-setup@v2
       with:
-        version: 8
+        version: 9.15.5  # 与 package.json 中指定的版本一致
+        
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: 'latest'  # 或指定一个稳定版本
         
     - name: Get pnpm store directory
       id: pnpm-cache
@@ -38,7 +36,7 @@ jobs:
         echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
         
     - name: Cache dependencies
-      uses: actions/cache@v4  # 更新到 v4
+      uses: actions/cache@v4
       with:
         path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
         key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -46,22 +44,26 @@ jobs:
           ${{ runner.os }}-pnpm-store-
           
     - name: Install dependencies
-      run: |
-        pnpm config set network-timeout 300000
-        pnpm install --no-frozen-lockfile
+      run: pnpm install
       
+    - name: Optimize for memory
+      run: |
+        # 清理不必要的进程和文件
+        pnpm store prune
+        rm -rf node_modules/.cache
+    
     - name: Build project
       run: |
         NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 pnpm run build
       env:
-        NODE_OPTIONS: '--max-old-space-size=8192'
+        NODE_OPTIONS: '--max-old-space-size=12288'
         
     - name: Package build artifacts
       run: |
         tar -czf lobe-chat-build.tar.gz .next public package.json pnpm-lock.yaml next.config.js
         
     - name: Upload build artifact
-      uses: actions/upload-artifact@v4  # 更新到 v4
+      uses: actions/upload-artifact@v4
       with:
         name: lobe-chat-build
         path: lobe-chat-build.tar.gz
