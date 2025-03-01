@@ -13,13 +13,16 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 120  # 设置超时时间
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4  # 更新到 v4
+      with:
+        fetch-depth: 1  # 减少克隆深度以加快速度
       
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4  # 更新到 v4
       with:
         node-version: '18'
         
@@ -30,32 +33,36 @@ jobs:
         
     - name: Get pnpm store directory
       id: pnpm-cache
+      shell: bash
       run: |
-        echo "::set-output name=pnpm_cache_dir::$(pnpm store path)"
+        echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
         
     - name: Cache dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4  # 更新到 v4
       with:
-        path: ${{ steps.pnpm-cache.outputs.pnpm_cache_dir }}
-        key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+        path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
         restore-keys: |
-          ${{ runner.os }}-pnpm-
+          ${{ runner.os }}-pnpm-store-
           
     - name: Install dependencies
-      run: pnpm install
+      run: |
+        pnpm config set network-timeout 300000
+        pnpm install --no-frozen-lockfile
       
     - name: Build project
       run: |
         NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 pnpm run build
       env:
-        NODE_OPTIONS: '--max-old-space-size=6144'
+        NODE_OPTIONS: '--max-old-space-size=8192'
         
     - name: Package build artifacts
       run: |
         tar -czf lobe-chat-build.tar.gz .next public package.json pnpm-lock.yaml next.config.js
         
     - name: Upload build artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4  # 更新到 v4
       with:
         name: lobe-chat-build
         path: lobe-chat-build.tar.gz
+        retention-days: 7  # 设置保留时间
