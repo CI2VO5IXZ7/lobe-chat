@@ -1,0 +1,61 @@
+name: Build LobeChat Artifact
+
+on:
+  workflow_dispatch:  # 允许手动触发
+  push:
+    branches: [ main ]  # 当推送到 main 分支时自动触发
+    paths-ignore:      # 忽略这些文件的变更
+      - '**.md'
+      - 'docs/**'
+      - '.github/**'
+      - '!.github/workflows/build-artifact.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+        
+    - name: Get pnpm store directory
+      id: pnpm-cache
+      run: |
+        echo "::set-output name=pnpm_cache_dir::$(pnpm store path)"
+        
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ${{ steps.pnpm-cache.outputs.pnpm_cache_dir }}
+        key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-
+          
+    - name: Install dependencies
+      run: pnpm install
+      
+    - name: Build project
+      run: |
+        NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 pnpm run build
+      env:
+        NODE_OPTIONS: '--max-old-space-size=6144'
+        
+    - name: Package build artifacts
+      run: |
+        tar -czf lobe-chat-build.tar.gz .next public package.json pnpm-lock.yaml next.config.js
+        
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: lobe-chat-build
+        path: lobe-chat-build.tar.gz
